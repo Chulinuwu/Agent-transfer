@@ -1,0 +1,18 @@
+{
+  "name": "agent-transfer",
+  "version": "0.1.0",
+  "description": "Move sessions and configuration between AI coding agents (Claude Code, Codex) through one neutral intermediate representation.",
+  "type": "module",
+  "bin": {
+    "agent-transfer": "bin/agent-transfer.mjs"
+  },
+  "files": ["bin", "src", "README.md", "LICENSE"],
+  "scripts": {
+    "test": "node --test \"test/*.test.mjs\""
+  },
+  "engines": {
+    "node": ">=20.11"
+  },
+  "keywords": ["claude-code", "codex", "session", "transfer", "handoff", "mcp", "agents"],
+  "license": "MIT"
+}
