@@ -99,11 +99,11 @@ test('claude -> codex emits a handoff, never a native Codex thread, and points t
   assert.equal(writes.length, 1);
   assert.equal(writes[0].path, join(root, '.agent-transfer', 'handoffs', `claude-${ir.sourceId}.md`));
   assert.match(writes[0].content, /\/repo\/auth\.js/);
-  assert.ok(plan.actions.some((a) => a.type === 'run' && /codex "(Continue "[^"]+"\. )?Read the handoff brief at/.test(a.command) && a.command.startsWith(`cd "${cwd}" && codex`)));
+  assert.ok(plan.actions.some((a) => a.type === 'run' && /codex "(Continue '[^'"]+'\. )?Read the handoff brief at [^"]+, then summarize/.test(a.command) && a.command.startsWith(`cd "${cwd}" && codex`)));
   assert.ok(plan.actions.some((a) => a.type === 'run' && a.command.includes('codex exec')));
   assert.match(plan.notes[0], /\/import/);
   assert.ok(!existsSync(join(root, '.codex')), 'emitting a plan writes nothing');
-  assert.match(emitHandoff(ir, { target: 'claude' }).actions[1].command, /claude "(Continue "[^"]+"\. )?Read the handoff brief/);
+  assert.match(emitHandoff(ir, { target: 'claude' }).actions[1].command, /claude "(Continue '[^'"]+'\. )?Read the handoff brief/);
 });
 
 test('an unnamed Codex thread is titled by its first request and the title reaches both targets', (t) => {
@@ -118,7 +118,9 @@ test('an unnamed Codex thread is titled by its first request and the title reach
   assert.equal(custom.customTitle, `${ir.title} (from codex)`);
   assert.ok(records.some((r) => r.type === 'ai-title' && r.aiTitle === custom.customTitle));
   const seed = emitHandoff(ir, { target: 'codex' }).actions.find((a) => a.type === 'run').command;
-  assert.ok(seed.includes(`Continue "${ir.title}". Read the handoff brief at`));
+  assert.ok(seed.includes(`Continue '${ir.title}'. Read the handoff brief at`));
+  const quoted = emitHandoff({ ...ir, title: 'Fix "login" for $USER' }, { target: 'codex' }).actions.find((a) => a.type === 'run').command;
+  assert.ok(quoted.includes("Continue 'Fix 'login' for 'USER'."), 'quotes and $ in a title cannot break out of the double-quoted prompt');
 });
 
 test('trimming keeps the newest turns within the turn and byte caps', () => {

@@ -66,7 +66,7 @@ export function buildBrief(session, { lastTurns = 12, toolOutput = 'none' } = {}
     describeDropped(session.dropped),
     '',
     '---',
-    'Continue this work. Check the current state of the files first; this brief may be out of date.',
+    'Start by telling the user, in a few short bullet points, what this session did and where it stopped. Do not change anything until they say what to do next, and check the current state of the files before you act; this brief may be out of date.',
     '',
   ].join('\n');
 }
@@ -75,8 +75,10 @@ const LAUNCH = { claude: 'claude', codex: 'codex' };
 
 export function emitHandoff(session, { target, out, lastTurns, toolOutput } = {}) {
   const path = out ?? join(handoffDir(), `${session.sourceTool}-${session.sourceId}.md`);
-  // Codex names a new thread from its first prompt, so leading with the source title keeps it findable.
-  const prompt = `${session.title ? `Continue "${session.title}". ` : ''}Read the handoff brief at ${path} and continue the work it describes.`;
+  // Codex names a new thread from its first prompt, so leading with the source title keeps it findable. The prompt is
+  // double-quoted in the printed command, so the title must not carry characters that end or expand that string.
+  const title = session.title?.replace(/["`$\\]/g, "'");
+  const prompt = `${title ? `Continue '${title}'. ` : ''}Read the handoff brief at ${path}, then summarize for me in a few bullet points what that session did and where it stopped. Do not change anything until I say what to do next.`;
   const cd = session.cwd ? `cd "${session.cwd}" && ` : '';
   const commands = LAUNCH[target]
     ? [{ type: 'run', what: `start ${target} with the brief`, command: `${cd}${LAUNCH[target]} "${prompt}"` }]
