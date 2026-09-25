@@ -6,13 +6,34 @@
   "bin": {
     "agent-transfer": "bin/agent-transfer.mjs"
   },
-  "files": ["bin", "src", "README.md", "LICENSE"],
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "test": "node --test \"test/*.test.mjs\""
   },
   "engines": {
     "node": ">=20.11"
   },
-  "keywords": ["claude-code", "codex", "session", "transfer", "handoff", "mcp", "agents"],
-  "license": "MIT"
+  "keywords": [
+    "claude-code",
+    "codex",
+    "session",
+    "transfer",
+    "handoff",
+    "mcp",
+    "agents"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Chulinuwu/Agent-transfer.git"
+  },
+  "homepage": "https://github.com/Chulinuwu/Agent-transfer#readme",
+  "bugs": {
+    "url": "https://github.com/Chulinuwu/Agent-transfer/issues"
+  }
 }
