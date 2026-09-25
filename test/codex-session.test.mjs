@@ -57,7 +57,7 @@ test('codex -> claude produces a valid resumable chain', (t) => {
   const records = emitClaudeSession(ir).actions[0].content.trim().split('\n').map((l) => JSON.parse(l)).filter((r) => r.uuid);
   assert.deepEqual(records.map((r) => r.type), ['user', 'assistant']);
   assert.equal(records[1].parentUuid, records[0].uuid);
-  assert.match(records[1].message.content[0].text, /\[tool apply_patch\] patch src\/health\.js/);
+  assert.equal(records[1].message.content[0].text, '- `shell`: rg health (failed)\n- `apply_patch`: patch src/health.js\n- `update_plan`: {"plan":[{"step":"write tests","status":"pending"},{"step":"add endpoint","status":"completed"}]}\n\nAdded src/health.js');
 });
 
 test('handoff brief carries goal, open todos, files and recent turns', (t) => {
@@ -69,6 +69,9 @@ test('handoff brief carries goal, open todos, files and recent turns', (t) => {
   assert.ok(!todos.includes('add endpoint'), 'completed plan items are not open todos');
   assert.match(brief, /- src\/health\.js/);
   assert.match(brief, /Added src\/health\.js/);
+  assert.match(brief, /- `shell`: rg health \(failed\)\n/);
+  assert.ok(!brief.includes('no matches'), 'recent turns omit tool output by default');
+  assert.match(buildBrief(parseCodexSession(writeCodexSession(root, cwd)), { toolOutput: 'short' }), /no matches/);
   assert.match(brief, /thinking 1/);
 });
 

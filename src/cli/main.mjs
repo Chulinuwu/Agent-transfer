@@ -8,6 +8,7 @@ const USAGE = `agent-transfer: move sessions and config between coding agents ($
 
   agent-transfer list    --from <tool> [--cwd DIR] [--limit N] [--json]
   agent-transfer session --from <tool> --to <tool> --id <id> [--last N] [--mode native|handoff]
+                         [--tool-output none|short|full] [--desktop auto|off]
                          [--cwd DIR] [--out FILE] [--no-redact] [--json] [--apply]
   agent-transfer config  --from <tool> --to <tool> [--what instructions,mcp,skills] [--cwd DIR]
                          [--include-secrets] [--force] [--apply]
@@ -24,6 +25,8 @@ const OPTIONS = {
   mode: { type: 'string' },
   out: { type: 'string' },
   what: { type: 'string' },
+  'tool-output': { type: 'string', default: 'none' },
+  desktop: { type: 'string', default: 'auto' },
   apply: { type: 'boolean', default: false },
   'dry-run': { type: 'boolean', default: false },
   force: { type: 'boolean', default: false },

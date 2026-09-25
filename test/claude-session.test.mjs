@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { applyPlan } from '../src/cli/apply.mjs';
 import { emitClaudeSession } from '../src/emitters/claude-session.mjs';
+import { renderTurn } from '../src/emitters/turn-text.mjs';
 import { claudeProjectDir } from '../src/homes.mjs';
 import { textOf } from '../src/ir/session.mjs';
 import { findClaudeSession, listClaudeSessions, parseClaudeSession } from '../src/parsers/claude-session.mjs';
@@ -91,7 +92,8 @@ test('Claude emitter writes a resumable uuid chain', (t) => {
     assert.equal(a.message.role, 'assistant');
     assert.ok(a.message.content.every((b) => b.type === 'text'), 'tool calls rendered as text blocks');
   }
-  assert.match(messages[1].message.content[0].text, /\[tool Edit, failed\] \/repo\/auth\.js\n {2}-> 1 failing/);
+  assert.equal(messages[1].message.content[0].text, 'Looking at auth.js\n\n- `Read`: /repo/auth.js\n- `Edit`: /repo/auth.js (failed)\n\nFixed; tests pass. api_key=sk-ant-abcdefghijklmnop123');
+  assert.equal(messages[0].message.content.split('\n')[0], '_Transferred from claude session 11111111 by agent-transfer; reasoning, images and native tool calls did not carry over._');
   assert.ok(records.some((r) => r.type === 'ai-title' && r.sessionId === sessionId));
 });
 
@@ -117,4 +119,30 @@ test('a session that starts with an assistant turn gets a user preamble', (t) =>
   const records = emitClaudeSession(ir).actions[0].content.trim().split('\n').map((l) => JSON.parse(l));
   assert.deepEqual(records.map((r) => r.type), ['user', 'assistant']);
   assert.match(records[0].message.content, /Transferred from codex session abc/);
+});
+const tool = (name, summary, output = '', isError = false) => ({ kind: 'tool', name, summary, input: null, output, isError });
+
+test('tool calls render as a compact list; long runs collapse and summaries are cut', () => {
+  const calls = Array.from({ length: 11 }, (_, i) => tool('exec_command', `step ${i}`, 'Script completed\nWall time: 1s\nOutput: {"big":true}'));
+  const text = renderTurn({ role: 'assistant', parts: [{ kind: 'text', text: 'Working on it.' }, ...calls, { kind: 'text', text: 'Done.' }] });
+  const lines = text.split('\n');
+  assert.equal(lines[0], 'Working on it.');
+  assert.equal(lines.filter((l) => l.startsWith('- `exec_command`')).length, 8);
+  assert.ok(lines.includes('- ... and 3 more tool calls'));
+  assert.ok(!text.includes('Wall time'), 'no outputs by default');
+  assert.equal(lines.at(-1), 'Done.');
+  const long = renderTurn({ role: 'assistant', parts: [tool('shell', 'x'.repeat(200))] });
+  assert.equal(long, `- \`shell\`: ${'x'.repeat(120)}...`);
+});
+
+test('--tool-output short and full add fenced output blocks', (t) => {
+  const { cwd } = sandbox(t);
+  const output = `${'a'.repeat(500)}\n\`\`\`inner fence`;
+  const turn = { role: 'assistant', parts: [tool('exec_command', 'npm test', output, true)] };
+  const short = renderTurn(turn, { toolOutput: 'short' });
+  assert.match(short, /^- `exec_command`: npm test \(failed\)\n {2}```\n {2}a{300}\.\.\.\n {2}```$/);
+  const full = renderTurn(turn, { toolOutput: 'full' });
+  assert.ok(full.includes('a'.repeat(500)) && full.includes('  ````\n'), 'a longer fence wraps output containing ```');
+  const records = emitClaudeSession({ sourceTool: 'codex', sourceId: 'abc', cwd, turns: [turn] }, { toolOutput: 'short' }).actions[0].content;
+  assert.ok(records.includes('a'.repeat(300)) && !records.includes('a'.repeat(301)));
 });

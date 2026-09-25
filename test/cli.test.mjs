@@ -82,5 +82,29 @@ test('bad input fails loudly', (t) => {
   assert.equal(run(['session', '--from', 'claude', '--to', 'codex', '--id', 'x', '--apply', '--dry-run'], env).status, 2);
   assert.equal(run(['session', '--from', 'claude', '--to', 'codex', '--id', 'x', '--mode', 'fancy'], env).status, 1);
   assert.equal(run(['session', '--from', 'claude', '--to', 'codex', '--id', 'x', '--last', 'lots'], env).status, 1);
+  assert.equal(run(['session', '--from', 'claude', '--to', 'codex', '--id', 'x', '--tool-output', 'all'], env).status, 1);
+  assert.equal(run(['session', '--from', 'claude', '--to', 'codex', '--id', 'x', '--desktop', 'on'], env).status, 1);
   assert.equal(run(['list', '--from', 'codex', '--json'], env).stdout.trim(), '[]');
+});
+test('the desktop sidebar record is previewed, written only with --apply, and skippable with --desktop off', (t) => {
+  const { root, cwd, env } = sandbox(t);
+  writeCodexSession(root, cwd);
+  const org = join(env.CLAUDE_DESKTOP_DIR, 'claude-code-sessions', 'acct', 'org');
+  put(join(org, 'local_existing.json'), { sessionId: 'local_existing', cliSessionId: 'c', cwd, title: 't', createdAt: 1, model: 'm', effort: 'e', permissionMode: 'p' });
+  const before = tree(root);
+
+  const preview = run(['session', '--from', 'codex', '--to', 'claude', '--id', CODEX_ID, '--tool-output', 'short'], env);
+  assert.equal(preview.status, 0, preview.stderr);
+  assert.match(preview.stdout, /create .*local_[0-9a-f-]{36}\.json {2}\(Claude desktop sidebar record/);
+  assert.match(preview.stdout, /note: fully quit and reopen the Claude desktop app to see it in the sidebar/);
+  assert.deepEqual(tree(root), before, 'dry run writes nothing');
+
+  assert.doesNotMatch(run(['session', '--from', 'codex', '--to', 'claude', '--id', CODEX_ID, '--desktop', 'off'], env).stdout, /sidebar record/);
+
+  const applied = run(['session', '--from', 'codex', '--to', 'claude', '--id', CODEX_ID, '--apply'], env);
+  assert.equal(applied.status, 0, applied.stderr);
+  const created = readdirSync(org).filter((f) => f !== 'local_existing.json');
+  assert.equal(created.length, 1);
+  const sessionId = /claude --resume ([0-9a-f-]{36})/.exec(applied.stdout)[1];
+  assert.equal(JSON.parse(readFileSync(join(org, created[0]), 'utf8')).cliSessionId, sessionId);
 });

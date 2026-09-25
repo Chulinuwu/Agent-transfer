@@ -2,13 +2,13 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-const HOME_VARS = ['HOME', 'USERPROFILE', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME'];
+const HOME_VARS = ['HOME', 'USERPROFILE', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'CLAUDE_DESKTOP_DIR'];
 
-// Every test gets a throwaway home so nothing touches the real ~/.claude or ~/.codex.
+// Every test gets a throwaway home so nothing touches the real ~/.claude, ~/.codex or Claude desktop app data.
 export function sandbox(t) {
   const root = mkdtempSync(join(tmpdir(), 'agent-transfer-'));
   const saved = Object.fromEntries(HOME_VARS.map((k) => [k, process.env[k]]));
-  const env = { HOME: root, USERPROFILE: root, CLAUDE_CONFIG_DIR: join(root, '.claude'), CODEX_HOME: join(root, '.codex') };
+  const env = { HOME: root, USERPROFILE: root, CLAUDE_CONFIG_DIR: join(root, '.claude'), CODEX_HOME: join(root, '.codex'), CLAUDE_DESKTOP_DIR: join(root, 'desktop', 'Claude') };
   Object.assign(process.env, env);
   t.after(() => {
     for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;

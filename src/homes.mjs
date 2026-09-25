@@ -6,6 +6,13 @@ export const claudeJson = () => process.env.CLAUDE_CONFIG_DIR ? join(process.env
 export const codexHome = () => process.env.CODEX_HOME || join(homedir(), '.codex');
 export const handoffDir = () => join(homedir(), '.agent-transfer', 'handoffs');
 
+export function claudeDesktopDir() {
+  if (process.env.CLAUDE_DESKTOP_DIR) return process.env.CLAUDE_DESKTOP_DIR;
+  if (process.platform === 'win32') return join(process.env.APPDATA || join(homedir(), 'AppData', 'Roaming'), 'Claude');
+  if (process.platform === 'darwin') return join(homedir(), 'Library', 'Application Support', 'Claude');
+  return join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'Claude');
+}
+
 // Claude Code names a project folder after its cwd with every non-alphanumeric character turned into '-'
 // (C:\Users\me\my_app -> C--Users-me-my-app). Paths over 200 characters get a hashed suffix whose
 // algorithm is not documented, so those are refused rather than guessed.

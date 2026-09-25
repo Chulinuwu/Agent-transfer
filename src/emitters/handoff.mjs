@@ -1,8 +1,8 @@
 import { join } from 'node:path';
 import { handoffDir } from '../homes.mjs';
 import { describeDropped, textOf } from '../ir/session.mjs';
-import { renderPart } from './claude-session.mjs';
 import { writeAction } from './plan.mjs';
+import { renderTurn } from './turn-text.mjs';
 
 const clip = (s, n) => (s.length > n ? `${s.slice(0, n)}\n[... trimmed]` : s);
 const tools = (session) => session.turns.flatMap((t) => t.parts.filter((p) => p.kind === 'tool'));
@@ -27,12 +27,12 @@ function openTodos(session) {
   return items.filter((i) => i.status !== 'completed').map((i) => `- [${i.status ?? 'pending'}] ${i.content ?? i.step ?? JSON.stringify(i)}`);
 }
 
-export function buildBrief(session, { lastTurns = 12 } = {}) {
+export function buildBrief(session, { lastTurns = 12, toolOutput = 'none' } = {}) {
   const firstUser = session.turns.find((t) => t.role === 'user' && textOf(t).trim());
   const lastAssistant = session.turns.findLast((t) => t.role === 'assistant' && textOf(t).trim());
   const todos = openTodos(session);
   const files = filesTouched(session);
-  const recent = session.turns.slice(-lastTurns).map((t) => `### ${t.role}${t.at ? ` (${t.at})` : ''}\n\n${clip(t.parts.map(renderPart).join('\n\n'), 3000)}`);
+  const recent = session.turns.slice(-lastTurns).map((t) => `### ${t.role}${t.at ? ` (${t.at})` : ''}\n\n${clip(renderTurn(t, { toolOutput }), 3000)}`);
   return [
     `# Handoff from ${session.sourceTool} session ${session.sourceId}`,
     '',
@@ -73,7 +73,7 @@ export function buildBrief(session, { lastTurns = 12 } = {}) {
 
 const LAUNCH = { claude: 'claude', codex: 'codex' };
 
-export function emitHandoff(session, { target, out, lastTurns } = {}) {
+export function emitHandoff(session, { target, out, lastTurns, toolOutput } = {}) {
   const path = out ?? join(handoffDir(), `${session.sourceTool}-${session.sourceId}.md`);
   // Codex names a new thread from its first prompt, so leading with the source title keeps it findable.
   const prompt = `${session.title ? `Continue "${session.title}". ` : ''}Read the handoff brief at ${path} and continue the work it describes.`;
@@ -82,5 +82,5 @@ export function emitHandoff(session, { target, out, lastTurns } = {}) {
     ? [{ type: 'run', what: `start ${target} with the brief`, command: `${cd}${LAUNCH[target]} "${prompt}"` }]
     : [{ type: 'run', what: 'paste into the target agent', command: prompt }];
   if (target === 'codex') commands.push({ type: 'run', what: 'or run it non-interactively', command: `${cd}codex exec "${prompt}"` });
-  return { actions: [writeAction(path, buildBrief(session, { lastTurns }), { what: 'handoff brief', force: true }), ...commands] };
+  return { actions: [writeAction(path, buildBrief(session, { lastTurns, toolOutput }), { what: 'handoff brief', force: true }), ...commands] };
 }

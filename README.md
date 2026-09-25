@@ -12,6 +12,7 @@ It is plain Node.js with no dependencies. Nothing is written until you pass `--a
 ```
 npx agent-transfer list    --from claude|codex [--cwd DIR] [--limit N] [--json]
 npx agent-transfer session --from claude|codex --to claude|codex --id <id> [--last N] [--mode native|handoff]
+                           [--tool-output none|short|full] [--desktop auto|off]
                            [--cwd DIR] [--out FILE] [--no-redact] [--json] [--apply]
 npx agent-transfer config  --from claude|codex --to claude|codex [--what instructions,mcp,skills] [--cwd DIR]
                            [--include-secrets] [--force] [--apply]
@@ -30,6 +31,7 @@ cd <project> && claude --resume <new id>                           # printed by 
 
 - Session ids can be a unique prefix.
 - `--last N` keeps the newest N turns (default 200); transcripts are also capped near 1 MB, and the preview says how many turns were trimmed.
+- `--tool-output none|short|full` controls how tool calls read in the new session and in handoff briefs. The default `none` writes one line per call (`` - `exec_command`: <command, file or first input line> ``, marked `(failed)` on errors) grouped as a list under the assistant's text, with runs over 8 collapsed into `... and N more tool calls`. `short` adds the first 300 characters of each output in a fenced block; `full` adds the whole stored output (up to 2,000 characters).
 - `--json` prints the IR instead of a plan, which is handy for debugging or feeding another tool.
 - Every run prints what was dropped or approximated. Unknown record types are listed, not fatal. A source version outside the tested range prints a warning.
 
@@ -37,12 +39,23 @@ cd <project> && claude --resume <new id>                           # printed by 
 
 | From -> To | Result | Fidelity |
 |---|---|---|
-| Codex -> Claude Code | Native Claude transcript in `~/.claude/projects/<encoded cwd>/<new uuid>.jsonl`, resumable with `claude --resume` | User and assistant text kept; tool calls and their (truncated) outputs rendered as text; reasoning, images and native tool ids dropped |
+| Codex -> Claude Code | Native Claude transcript in `~/.claude/projects/<encoded cwd>/<new uuid>.jsonl`, resumable with `claude --resume` | User and assistant text kept; tool calls rendered as one-line summaries (outputs with `--tool-output`); reasoning, images and native tool ids dropped |
 | Claude Code -> Claude Code | Same as above: a text-only fork of the session | Same as above |
 | Claude Code -> Codex | Handoff brief plus a ready `codex "..."` / `codex exec "..."` command | Goal, latest state, open todos, files touched, last turns. For a full resumable thread, Codex's own `/import` is the higher-fidelity path |
 | Codex -> Codex | Handoff brief | As above |
 
 Why no native Codex sessions: Codex 0.154 keeps threads in paginated SQLite stores (`state_5.sqlite`, `thread_history_1.sqlite`) next to the rollout files. Writing those from outside is fragile and changes between releases, so agent-transfer writes a brief the new session reads instead. `--mode handoff` produces the same brief for a Claude target.
+
+### Claude desktop app sidebar
+
+The Claude desktop app lists only sessions it has its own record for, so a transcript written to `~/.claude/projects` opens with `claude --resume` but does not show up in the app's sidebar. With `--desktop auto` (the default), a Claude target also plans a small sidebar record next to the app's existing ones:
+
+- The app data folder is `%APPDATA%\Claude` on Windows, `~/Library/Application Support/Claude` on macOS and `$XDG_CONFIG_HOME/Claude` (or `~/.config/Claude`) on Linux; set `CLAUDE_DESKTOP_DIR` to point elsewhere.
+- Records live in `claude-code-sessions/<account>/<org>/local_<uuid>.json`. If several account/org folders have records, the one used most recently is picked and named in the output. If none exist, the step is skipped with a note.
+- The new record points at the new Claude Code session and copies the model, effort and permission mode from the newest existing record. If that record does not look like the expected format, the step is skipped; the session still opens with `claude --resume`.
+- Existing records are never changed or deleted. The record is shown in the preview and written only with `--apply`. Fully quit and reopen the desktop app to see the session.
+
+This is best effort against an undocumented app format that may change in any release. `--desktop off` skips it.
 
 Handoff briefs are saved to `~/.agent-transfer/handoffs/<tool>-<id>.md` (or `--out`).
 
@@ -59,7 +72,7 @@ Claude Code writes `~/.claude.json` itself while it runs. Quit running Claude Co
 ## What cannot move
 
 - Reasoning: Claude thinking blocks are signed and Codex reasoning is encrypted; neither is portable. They are counted, not copied.
-- Native tool calls: tool names, ids and schemas differ between tools, so calls and outputs become text. Outputs are truncated to 2,000 characters.
+- Native tool calls: tool names, ids and schemas differ between tools, so calls become text summaries. Outputs are left out unless `--tool-output` asks for them, and are truncated to 2,000 characters either way.
 - Images, attachments, file-history snapshots and hook output.
 - Model, permission and sandbox profiles, token and cost accounting.
 - Subagent transcripts (Claude sidechains). Codex inter-agent messages are kept as text; their encrypted parts are dropped.
