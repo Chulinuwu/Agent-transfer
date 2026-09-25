@@ -12,7 +12,7 @@ It is plain Node.js with no dependencies. Nothing is written until you pass `--a
 ```
 npx agent-transfer list    --from claude|codex [--cwd DIR] [--limit N] [--json]
 npx agent-transfer session --from claude|codex --to claude|codex --id <id> [--last N] [--mode native|handoff]
-                           [--tool-output none|short|full] [--desktop auto|off]
+                           [--tool-output none|short|full] [--tool-render native|text|hidden] [--desktop auto|off]
                            [--cwd DIR] [--out FILE] [--no-redact] [--json] [--apply]
 npx agent-transfer config  --from claude|codex --to claude|codex [--what instructions,mcp,skills] [--cwd DIR]
                            [--include-secrets] [--force] [--apply]
@@ -31,7 +31,8 @@ cd <project> && claude --resume <new id>                           # printed by 
 
 - Session ids can be a unique prefix.
 - `--last N` keeps the newest N turns (default 200); transcripts are also capped near 1 MB, and the preview says how many turns were trimmed.
-- `--tool-output none|short|full` controls how tool calls read in the new session and in handoff briefs. The default `none` writes one line per call (`` - `exec_command`: <command, file or first input line> ``, marked `(failed)` on errors) grouped as a list under the assistant's text, with runs over 8 collapsed into `... and N more tool calls`. `short` adds the first 300 characters of each output in a fenced block; `full` adds the whole stored output (up to 2,000 characters).
+- `--tool-render native|text|hidden` controls how tool calls appear in a Claude Code target (see [Tool calls in Claude Code](#tool-calls-in-claude-code)). Handoff briefs always use the compact text list.
+- `--tool-output none|short|full` controls how much tool output is carried. In text form (handoff briefs and `--tool-render text`) the default `none` writes one line per call (`` - `exec_command`: <command, file or first input line> ``, marked `(failed)` on errors) grouped as a list under the assistant's text, with runs over 8 collapsed into `... and N more tool calls`. `short` adds the first 300 characters of each output in a fenced block; `full` adds the whole stored output (up to 2,000 characters).
 - `--json` prints the IR instead of a plan, which is handy for debugging or feeding another tool.
 - Every run prints what was dropped or approximated. Unknown record types are listed, not fatal. A source version outside the tested range prints a warning.
 
@@ -39,12 +40,28 @@ cd <project> && claude --resume <new id>                           # printed by 
 
 | From -> To | Result | Fidelity |
 |---|---|---|
-| Codex -> Claude Code | Native Claude transcript in `~/.claude/projects/<encoded cwd>/<new uuid>.jsonl`, resumable with `claude --resume` | User and assistant text kept; tool calls rendered as one-line summaries (outputs with `--tool-output`); reasoning, images and native tool ids dropped |
-| Claude Code -> Claude Code | Same as above: a text-only fork of the session | Same as above |
+| Codex -> Claude Code | Native Claude transcript in `~/.claude/projects/<encoded cwd>/<new uuid>.jsonl`, resumable with `claude --resume` | User and assistant text kept; tool calls replayed as Claude tool calls (shell commands as `Bash`), outputs with `--tool-output`; reasoning and images dropped |
+| Claude Code -> Claude Code | Same as above: a fork of the session | Same as above; tool calls keep their original names and inputs |
 | Claude Code -> Codex | Handoff brief plus a ready `codex "..."` / `codex exec "..."` command | Goal, latest state, open todos, files touched, last turns. For a full resumable thread, Codex's own `/import` is the higher-fidelity path |
 | Codex -> Codex | Handoff brief | As above |
 
 Why no native Codex sessions: Codex 0.154 keeps threads in paginated SQLite stores (`state_5.sqlite`, `thread_history_1.sqlite`) next to the rollout files. Writing those from outside is fragile and changes between releases, so agent-transfer writes a brief the new session reads instead. `--mode handoff` produces the same brief for a Claude target.
+
+### Tool calls in Claude Code
+
+With `--tool-render native` (the default), each tool call becomes a real `tool_use` block in an assistant record, paired with a `tool_result` in the next user record, the same shape Claude Code writes itself. Claude Code and the desktop app then show them as tool calls rather than text.
+
+| Source tool | Written as |
+|---|---|
+| Codex `exec_command`, `shell`, `shell_command`, `local_shell`, `container.exec`, `unified_exec` | `Bash` with `{ command, description }`; `["bash", "-lc", "<script>"]` becomes the script |
+| Any other Codex tool (JS code-mode `exec`, `wait`, `apply_patch`, `update_plan`, MCP calls, ...) | Its own name with a `codex_` prefix and its original input (a string input is wrapped as `{ input }`) |
+| Claude Code tools (Claude -> Claude) | Unchanged name and input |
+
+Every `tool_use` gets exactly one `tool_result`. With `--tool-output none` that result is a one-line stand-in, `(output not carried over)`; `short` and `full` carry the first 300 characters or the whole stored output.
+
+Before choosing this, resuming was tested with Claude Code 2.1.281 (`claude -p --resume`) on synthetic transcripts: both `Bash` calls and calls under a tool name Claude Code does not have were accepted and the model read them as earlier tool calls. That is why unmapped tools stay native under a prefixed name instead of falling back to text; the prefix keeps them from looking like a tool the new session can call. How the desktop app draws tool cards for names it does not know is up to the app.
+
+`--tool-render text` writes the compact text list described under `--tool-output` (the previous behaviour). `--tool-render hidden` drops tool calls and leaves one italic line per run, such as `_(3 tool calls not shown)_`.
 
 ### Claude desktop app sidebar
 
@@ -72,7 +89,7 @@ Claude Code writes `~/.claude.json` itself while it runs. Quit running Claude Co
 ## What cannot move
 
 - Reasoning: Claude thinking blocks are signed and Codex reasoning is encrypted; neither is portable. They are counted, not copied.
-- Native tool calls: tool names, ids and schemas differ between tools, so calls become text summaries. Outputs are left out unless `--tool-output` asks for them, and are truncated to 2,000 characters either way.
+- Native tool call ids and exact schemas: calls are replayed with new ids, shell commands as `Bash` and other tools under a prefixed name. Outputs are left out unless `--tool-output` asks for them, and are truncated to 2,000 characters either way. Codex targets get tool calls as text in the brief.
 - Images, attachments, file-history snapshots and hook output.
 - Model, permission and sandbox profiles, token and cost accounting.
 - Subagent transcripts (Claude sidechains). Codex inter-agent messages are kept as text; their encrypted parts are dropped.
