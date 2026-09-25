@@ -96,7 +96,7 @@ export function parseCodexSession(file) {
     } else if (r.type === 'response_item') readItem(session, p, r.timestamp, calls);
     else if (!METADATA.has(r.type)) noteUnknown(session, r.type);
   }
-  session.title = threadNames().get(session.sourceId) ?? null;
+  session.title = threadNames().get(session.sourceId) ?? firstRequest(records) ?? null;
   return session;
 }
 

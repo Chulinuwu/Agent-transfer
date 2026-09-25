@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 import { emitClaudeSession } from '../src/emitters/claude-session.mjs';
@@ -80,11 +80,26 @@ test('claude -> codex emits a handoff, never a native Codex thread, and points t
   assert.equal(writes.length, 1);
   assert.equal(writes[0].path, join(root, '.agent-transfer', 'handoffs', `claude-${ir.sourceId}.md`));
   assert.match(writes[0].content, /\/repo\/auth\.js/);
-  assert.ok(plan.actions.some((a) => a.type === 'run' && a.command.startsWith(`cd "${cwd}" && codex "Read the handoff brief at`)));
+  assert.ok(plan.actions.some((a) => a.type === 'run' && /codex "(Continue "[^"]+"\. )?Read the handoff brief at/.test(a.command) && a.command.startsWith(`cd "${cwd}" && codex`)));
   assert.ok(plan.actions.some((a) => a.type === 'run' && a.command.includes('codex exec')));
   assert.match(plan.notes[0], /\/import/);
   assert.ok(!existsSync(join(root, '.codex')), 'emitting a plan writes nothing');
-  assert.match(emitHandoff(ir, { target: 'claude' }).actions[1].command, /claude "Read the handoff brief/);
+  assert.match(emitHandoff(ir, { target: 'claude' }).actions[1].command, /claude "(Continue "[^"]+"\. )?Read the handoff brief/);
+});
+
+test('an unnamed Codex thread is titled by its first request and the title reaches both targets', (t) => {
+  const { root, cwd } = sandbox(t);
+  const file = writeCodexSession(root, cwd);
+  assert.equal(parseCodexSession(file).title, 'Health endpoint');
+  rmSync(join(root, '.codex', 'session_index.jsonl'));
+  const ir = parseCodexSession(file);
+  assert.match(ir.title, /^Add a health endpoint/);
+  const records = emitClaudeSession(ir).actions[0].content.trim().split('\n').map((l) => JSON.parse(l));
+  const custom = records.find((r) => r.type === 'custom-title');
+  assert.equal(custom.customTitle, `${ir.title} (from codex)`);
+  assert.ok(records.some((r) => r.type === 'ai-title' && r.aiTitle === custom.customTitle));
+  const seed = emitHandoff(ir, { target: 'codex' }).actions.find((a) => a.type === 'run').command;
+  assert.ok(seed.includes(`Continue "${ir.title}". Read the handoff brief at`));
 });
 
 test('trimming keeps the newest turns within the turn and byte caps', () => {

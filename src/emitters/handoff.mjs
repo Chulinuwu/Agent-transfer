@@ -75,7 +75,8 @@ const LAUNCH = { claude: 'claude', codex: 'codex' };
 
 export function emitHandoff(session, { target, out, lastTurns } = {}) {
   const path = out ?? join(handoffDir(), `${session.sourceTool}-${session.sourceId}.md`);
-  const prompt = `Read the handoff brief at ${path} and continue the work it describes.`;
+  // Codex names a new thread from its first prompt, so leading with the source title keeps it findable.
+  const prompt = `${session.title ? `Continue "${session.title}". ` : ''}Read the handoff brief at ${path} and continue the work it describes.`;
   const cd = session.cwd ? `cd "${session.cwd}" && ` : '';
   const commands = LAUNCH[target]
     ? [{ type: 'run', what: `start ${target} with the brief`, command: `${cd}${LAUNCH[target]} "${prompt}"` }]

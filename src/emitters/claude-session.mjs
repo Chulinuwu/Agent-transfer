@@ -39,7 +39,11 @@ export function emitClaudeSession(session, { cwd = session.cwd, version = TESTED
     records.push({ parentUuid, ...base, type: turn.role, message, uuid, timestamp });
     parentUuid = uuid;
   }
-  if (session.title) records.push({ type: 'ai-title', aiTitle: `${session.title} (from ${session.sourceTool})`, sessionId });
+  // Claude Code's session lists show custom-title first; ai-title is kept for builds that only read that.
+  if (session.title) {
+    const title = `${session.title} (from ${session.sourceTool})`;
+    records.push({ type: 'ai-title', aiTitle: title, sessionId }, { type: 'custom-title', customTitle: title, sessionId });
+  }
 
   const path = join(claudeProjectDir(cwd), `${sessionId}.jsonl`);
   return {
