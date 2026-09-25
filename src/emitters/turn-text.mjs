@@ -2,7 +2,7 @@ export const TOOL_OUTPUT = { none: 0, short: 300, full: Infinity };
 const SUMMARY_LIMIT = 120;
 const MAX_TOOLS = 8;
 
-const cut = (s, n) => (s.length > n ? `${s.slice(0, n)}...` : s);
+export const cut = (s, n) => (s.length > n ? `${s.slice(0, n)}...` : s);
 
 // A fence longer than any backtick run inside the output keeps it from closing the block early.
 function fenced(text) {
@@ -16,18 +16,19 @@ function renderTool(part, toolOutput) {
   return limit && part.output ? `${line}\n${fenced(cut(part.output, limit))}` : line;
 }
 
-function renderTools(parts, toolOutput) {
+function renderTools(parts, toolOutput, tools) {
+  if (tools === 'hidden') return `_(${parts.length} tool call${parts.length === 1 ? '' : 's'} not shown)_`;
   const lines = parts.slice(0, MAX_TOOLS).map((p) => renderTool(p, toolOutput));
   if (parts.length > MAX_TOOLS) lines.push(`- ... and ${parts.length - MAX_TOOLS} more tool calls`);
   return lines.join('\n');
 }
 
 // Prose stays verbatim; each run of consecutive tool calls becomes one compact list below the text before it.
-export function renderTurn(turn, { toolOutput = 'none' } = {}) {
+export function renderTurn(turn, { toolOutput = 'none', tools = 'text' } = {}) {
   const blocks = [];
   let run = [];
   const flush = () => {
-    if (run.length) blocks.push(renderTools(run, toolOutput));
+    if (run.length) blocks.push(renderTools(run, toolOutput, tools));
     run = [];
   };
   for (const part of turn.parts) {

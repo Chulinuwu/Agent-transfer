@@ -70,7 +70,7 @@ test('list and find locate sessions by id prefix', (t) => {
 test('Claude emitter writes a resumable uuid chain', (t) => {
   const { root, cwd } = sandbox(t);
   const ir = parseClaudeSession(writeClaudeSession(root, cwd));
-  const { sessionId, actions } = emitClaudeSession(ir);
+  const { sessionId, actions } = emitClaudeSession(ir, { toolRender: 'text' });
   const [write, resume] = actions;
 
   assert.equal(write.type, 'write');

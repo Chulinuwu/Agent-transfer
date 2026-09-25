@@ -83,6 +83,7 @@ test('bad input fails loudly', (t) => {
   assert.equal(run(['session', '--from', 'claude', '--to', 'codex', '--id', 'x', '--mode', 'fancy'], env).status, 1);
   assert.equal(run(['session', '--from', 'claude', '--to', 'codex', '--id', 'x', '--last', 'lots'], env).status, 1);
   assert.equal(run(['session', '--from', 'claude', '--to', 'codex', '--id', 'x', '--tool-output', 'all'], env).status, 1);
+  assert.equal(run(['session', '--from', 'claude', '--to', 'codex', '--id', 'x', '--tool-render', 'cards'], env).status, 1);
   assert.equal(run(['session', '--from', 'claude', '--to', 'codex', '--id', 'x', '--desktop', 'on'], env).status, 1);
   assert.equal(run(['list', '--from', 'codex', '--json'], env).stdout.trim(), '[]');
 });

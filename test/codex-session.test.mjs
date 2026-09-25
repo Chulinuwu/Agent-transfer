@@ -51,10 +51,10 @@ test('Codex list reads identity from the head and titles from the index', (t) =>
   assert.throws(() => findCodexSession('deadbeef'), /no rollout file/);
 });
 
-test('codex -> claude produces a valid resumable chain', (t) => {
+test('codex -> claude with --tool-render text keeps the compact text list', (t) => {
   const { root, cwd } = sandbox(t);
   const ir = parseCodexSession(writeCodexSession(root, cwd));
-  const records = emitClaudeSession(ir).actions[0].content.trim().split('\n').map((l) => JSON.parse(l)).filter((r) => r.uuid);
+  const records = emitClaudeSession(ir, { toolRender: 'text' }).actions[0].content.trim().split('\n').map((l) => JSON.parse(l)).filter((r) => r.uuid);
   assert.deepEqual(records.map((r) => r.type), ['user', 'assistant']);
   assert.equal(records[1].parentUuid, records[0].uuid);
   assert.equal(records[1].message.content[0].text, '- `shell`: rg health (failed)\n- `apply_patch`: patch src/health.js\n- `update_plan`: {"plan":[{"step":"write tests","status":"pending"},{"step":"add endpoint","status":"completed"}]}\n\nAdded src/health.js');
