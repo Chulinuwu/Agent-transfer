@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { existsSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { basename, join } from 'node:path';
 import test from 'node:test';
 import { emitClaudeSession } from '../src/emitters/claude-session.mjs';
 import { emitCodexSession } from '../src/emitters/codex-session.mjs';
@@ -8,7 +8,7 @@ import { buildBrief, emitHandoff } from '../src/emitters/handoff.mjs';
 import { textOf, trimSession } from '../src/ir/session.mjs';
 import { parseClaudeSession } from '../src/parsers/claude-session.mjs';
 import { findCodexSession, listCodexSessions, parseCodexSession } from '../src/parsers/codex-session.mjs';
-import { CODEX_ID, sandbox, writeClaudeSession, writeCodexSession } from './fixtures.mjs';
+import { CODEX_ID, jsonl, put, sandbox, writeClaudeSession, writeCodexSession } from './fixtures.mjs';
 
 test('Codex rollout parses into the IR with tool calls and outputs paired', (t) => {
   const { root, cwd } = sandbox(t);
@@ -51,6 +51,22 @@ test('Codex list reads identity from the head and titles from the index', (t) =>
   assert.throws(() => findCodexSession('deadbeef'), /no rollout file/);
 });
 
+test('Codex list also reads threads from the Orca Codex home and keeps one copy per rollout', (t) => {
+  const { root, cwd } = sandbox(t);
+  const home = writeCodexSession(root, cwd);
+  const orca = join(root, 'orca-codex');
+  const copy = join(orca, 'sessions', '2026', '09', '02', basename(home));
+  put(copy, `${readFileSync(home, 'utf8')}${JSON.stringify({ timestamp: '2026-09-02T10:00:00Z', type: 'event_msg', payload: {} })}\n`);
+  const orcaId = '019f1111-2222-7333-8444-555555555555';
+  put(join(orca, 'sessions', '2026', '09', '03', `rollout-2026-09-03T09-00-00-${orcaId}.jsonl`), jsonl([{ timestamp: '2026-09-03T09:00:00Z', type: 'session_meta', payload: { id: orcaId, cwd, cli_version: '0.154.0' } }]));
+  put(join(orca, 'session_index.jsonl'), jsonl([{ id: orcaId, thread_name: 'Started in Orca' }]));
+
+  const sessions = listCodexSessions();
+  assert.equal(sessions.length, 2);
+  assert.equal(sessions.find((s) => s.id === CODEX_ID).file, copy);
+  assert.equal(sessions.find((s) => s.id === orcaId).title, 'Started in Orca');
+  assert.ok(findCodexSession('019f1111').startsWith(orca));
+});
 test('codex -> claude with --tool-render text keeps the compact text list', (t) => {
   const { root, cwd } = sandbox(t);
   const ir = parseCodexSession(writeCodexSession(root, cwd));

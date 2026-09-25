@@ -47,6 +47,8 @@ cd <project> && claude --resume <new id>                           # printed by 
 
 Why no native Codex sessions: Codex 0.154 keeps threads in paginated SQLite stores (`state_5.sqlite`, `thread_history_1.sqlite`) next to the rollout files. Writing those from outside is fragile and changes between releases, so agent-transfer writes a brief the new session reads instead. `--mode handoff` produces the same brief for a Claude target.
 
+Where sessions are read from: Claude Code sessions come from `~/.claude/projects` (or `CLAUDE_CONFIG_DIR`), which the CLI, the desktop app and wrappers such as Orca all share. Codex sessions come from `CODEX_HOME`, `~/.codex` and, when it exists, the separate Codex home that Orca keeps under its app data folder (`%APPDATA%\orca\codex-runtime-home\home` on Windows; set `ORCA_CODEX_HOME` to point elsewhere). A thread found in more than one home is listed once, from its largest copy.
+
 ### Tool calls in Claude Code
 
 With `--tool-render native` (the default), each tool call becomes a real `tool_use` block in an assistant record, paired with a `tool_result` in the next user record, the same shape Claude Code writes itself. Claude Code and the desktop app then show them as tool calls rather than text.

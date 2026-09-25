@@ -6,12 +6,18 @@ export const claudeJson = () => process.env.CLAUDE_CONFIG_DIR ? join(process.env
 export const codexHome = () => process.env.CODEX_HOME || join(homedir(), '.codex');
 export const handoffDir = () => join(homedir(), '.agent-transfer', 'handoffs');
 
-export function claudeDesktopDir() {
-  if (process.env.CLAUDE_DESKTOP_DIR) return process.env.CLAUDE_DESKTOP_DIR;
-  if (process.platform === 'win32') return join(process.env.APPDATA || join(homedir(), 'AppData', 'Roaming'), 'Claude');
-  if (process.platform === 'darwin') return join(homedir(), 'Library', 'Application Support', 'Claude');
-  return join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'Claude');
+function appDataDir() {
+  if (process.platform === 'win32') return process.env.APPDATA || join(homedir(), 'AppData', 'Roaming');
+  if (process.platform === 'darwin') return join(homedir(), 'Library', 'Application Support');
+  return process.env.XDG_CONFIG_HOME || join(homedir(), '.config');
 }
+
+export const claudeDesktopDir = () => process.env.CLAUDE_DESKTOP_DIR || join(appDataDir(), 'Claude');
+
+// Orca runs Codex with its own CODEX_HOME, so threads started inside Orca never reach ~/.codex.
+export const orcaCodexHome = () => process.env.ORCA_CODEX_HOME || join(appDataDir(), 'orca', 'codex-runtime-home', 'home');
+
+export const codexSessionHomes = () => [...new Set([codexHome(), join(homedir(), '.codex'), orcaCodexHome()])];
 
 // Claude Code names a project folder after its cwd with every non-alphanumeric character turned into '-'
 // (C:\Users\me\my_app -> C--Users-me-my-app). Paths over 200 characters get a hashed suffix whose

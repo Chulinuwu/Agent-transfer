@@ -1,6 +1,6 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
-import { codexHome } from '../homes.mjs';
+import { codexSessionHomes } from '../homes.mjs';
 import { appendPart, createSession, noteUnknown, setToolOutput, toolPart } from '../ir/session.mjs';
 import { peekJsonl, readJsonl } from './jsonl.mjs';
 
@@ -9,21 +9,30 @@ const TOOL_CALLS = new Set(['function_call', 'custom_tool_call', 'local_shell_ca
 const TOOL_OUTPUTS = new Set(['function_call_output', 'custom_tool_call_output', 'local_shell_call_output', 'tool_search_output']);
 
 const walk = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(join(dir, e.name)) : [join(dir, e.name)]));
+const sessionRoots = () => codexSessionHomes().map((home) => join(home, 'sessions'));
+
+// Orca's home can hold copies of ~/.codex rollouts, so one thread may live in both; the larger copy has the most turns.
 const rolloutFiles = () => {
-  const root = join(codexHome(), 'sessions');
-  return existsSync(root) ? walk(root).filter((f) => /^rollout-.*\.jsonl$/.test(basename(f))) : [];
+  const byName = new Map();
+  for (const root of sessionRoots().filter(existsSync)) {
+    for (const file of walk(root).filter((f) => /^rollout-.*\.jsonl$/.test(basename(f)))) {
+      const kept = byName.get(basename(file));
+      if (!kept || statSync(file).size > statSync(kept).size) byName.set(basename(file), file);
+    }
+  }
+  return [...byName.values()];
 };
 const idFromName = (file) => /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/.exec(file)?.[1] ?? basename(file, '.jsonl');
 
 function threadNames() {
-  const index = join(codexHome(), 'session_index.jsonl');
   const names = new Map();
-  if (!existsSync(index)) return names;
-  for (const line of readFileSync(index, 'utf8').split('\n')) {
-    try {
-      const { id, thread_name: name } = JSON.parse(line);
-      if (id && name) names.set(id, name);
-    } catch {}
+  for (const index of codexSessionHomes().map((home) => join(home, 'session_index.jsonl')).filter(existsSync)) {
+    for (const line of readFileSync(index, 'utf8').split('\n')) {
+      try {
+        const { id, thread_name: name } = JSON.parse(line);
+        if (id && name) names.set(id, name);
+      } catch {}
+    }
   }
   return names;
 }
@@ -57,7 +66,7 @@ export function findCodexSession(id) {
   if (matches.length > 1) throw new Error(`session id ${id} is ambiguous (${matches.length} matches)`);
   // Codex 0.154 also projects threads into thread_history_1.sqlite, but every thread still has a rollout file;
   // one without is not something this tool reads.
-  throw new Error(`no rollout file for Codex thread ${id} under ${join(codexHome(), 'sessions')}; if the thread only exists in Codex's sqlite store, resume it in Codex and let it write a rollout first`);
+  throw new Error(`no rollout file for Codex thread ${id} under ${sessionRoots().join(' or ')}; if the thread only exists in Codex's sqlite store, resume it in Codex and let it write a rollout first`);
 }
 
 // Codex injects instructions and environment as user-role messages wrapped in a single tag, e.g.
